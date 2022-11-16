@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -46,22 +47,22 @@ namespace CSharpModelsToJson
 
         public override void VisitRecordDeclaration(RecordDeclarationSyntax node)
         {
-            var model = new Model()
+            var model = new Model
             {
                 ModelName = $"{node.Identifier.ToString()}{node.TypeParameterList?.ToString()}",
                 Fields = node.ParameterList?.Parameters
                                 .Where(field => IsAccessible(field.Modifiers))
                                 .Where(property => !IsIgnored(property.AttributeLists))
-                                .Select((field) => new Field
+                                .Select(field => new Field
                                     {
                                         Identifier = field.Identifier.ToString(),
-                                        Type = field.Type.ToString(),
+                                        Type = field.Type?.ToString()
                                     }),
                 Properties = node.Members.OfType<PropertyDeclarationSyntax>()
                                 .Where(property => IsAccessible(property.Modifiers))
                                 .Where(property => !IsIgnored(property.AttributeLists))
                                 .Select(ConvertProperty),
-                BaseClasses = new List<string>(),
+                BaseClasses = new List<string>()
             };
 
             Models.Add(model);
@@ -69,7 +70,7 @@ namespace CSharpModelsToJson
 
         private static Model CreateModel(TypeDeclarationSyntax node)
         {
-            return new Model()
+            return new Model
             {
                 ModelName = $"{node.Identifier.ToString()}{node.TypeParameterList?.ToString()}",
                 Fields = node.Members.OfType<FieldDeclarationSyntax>()
@@ -79,7 +80,7 @@ namespace CSharpModelsToJson
                 Properties = node.Members.OfType<PropertyDeclarationSyntax>()
                                 .Where(property => IsAccessible(property.Modifiers))
                                 .Where(property => !IsIgnored(property.AttributeLists))
-                                .Select(ConvertProperty),
+                                .Select(ConvertJsonProperty),
                 BaseClasses = node.BaseList?.Types.Select(s => s.ToString()),
             };
         }
@@ -98,7 +99,7 @@ namespace CSharpModelsToJson
         private static Field ConvertField(FieldDeclarationSyntax field) => new Field
         {
             Identifier = field.Declaration.Variables.First().GetText().ToString(),
-            Type = field.Declaration.Type.ToString(),
+            Type = field.Declaration.Type.ToString()
         };
 
         private static Property ConvertProperty(PropertyDeclarationSyntax property) => new Property
@@ -106,5 +107,43 @@ namespace CSharpModelsToJson
             Identifier = property.Identifier.ToString(),
             Type = property.Type.ToString(),
         };
+
+        /// <summary>
+        /// Method that converts a given property and assigns it's Identifier value to a JsonPropertyName attribute.
+        /// This will fallback to the original Identifier name if no JsonPropertyName attribute is applied to the DTO.
+        /// </summary>
+        /// <param name="property">The property to be converted.</param>
+        /// <returns>The converted property ready to be converted into a TS type.</returns>
+        private static Property ConvertJsonProperty(PropertyDeclarationSyntax property)
+        {
+            var convertedProperty = new Property
+            {
+                Identifier = property.Identifier.ToString(),
+                Type = property.Type.ToString()
+            };
+            
+            // This is in place because we are using a "Enumerations" base class that contains all enums, this removes the prefix so the DTOs use the enums correctly.
+            if (convertedProperty.Type.Contains("Enumerations."))
+            {
+                convertedProperty.Type = convertedProperty.Type.Replace("Enumerations.", "");
+            }
+            
+            foreach (var attr in property.AttributeLists.SelectMany(attributeList => attributeList.Attributes))
+            {
+                if (attr.Name.ToString().Equals("JsonPropertyName"))
+                {
+                    var converted = string.Empty;
+                    var regex = new Regex("\"[^\"]*\"");
+                    foreach (var match in regex.Matches(attr.GetText().ToString()))
+                    {
+                        converted = match.ToString();
+                    }
+
+                    convertedProperty.Identifier = converted?.Replace("\"", "");
+                }
+            }
+
+            return convertedProperty;
+        }
     }
 }

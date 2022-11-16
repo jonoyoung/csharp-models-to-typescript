@@ -1,0 +1,23 @@
+{
+    "include": [
+        "PATH_TO_DTOS/**/*.cs",
+        "PATH_TO_ENUMS/Enumerations.cs"
+    ],
+    "exclude": [],
+    "namespace": "Dto",
+    "output": "OUTPUT_DIRECTORY/dto.d.ts",
+    "camelCase": false,
+    "camelCaseEnums": false,
+    "camelCaseOptions": {
+        "pascalCase": false,
+        "preserveConsecutiveUppercase": false,
+        "locale": "en-US"
+    },
+    "numericEnums": false,
+    "omitFilePathComment": false,
+    "stringLiteralTypesInsteadOfEnums": false,
+    "customTypeTranslations": {
+        "ProductName": "string",
+        "ProductNumber": "string"
+    }
+}
